@@ -42,6 +42,7 @@ These words are the constitution. The `docs/CONSTRAINTS.md` file translates them
   INTERACTION-MODEL.md      — the exact proposed UX (most important design doc)
   ROADMAP.md                — phased plan
   DECISIONS.md              — every major choice + rationale
+  BRANCHING-STRATEGY.md     — multi-agent branching & PR rules (read when using agents)
 
 context/
   INITIAL-BRIEFING.md       — this file
@@ -49,6 +50,8 @@ context/
 
 src/                        — future implementation
 ```
+
+**GitHub**: https://github.com/thomasdisney/socratic-writer (primary remote)
 
 ---
 
@@ -68,11 +71,12 @@ See README.md, QUICKSTART.md, and the app/ for the live experience.
 
 ## For Future Agents and Contributors
 
-1. Read the docs/ in the order listed in README.md before touching code.
+1. Read the docs/ in the order listed in README.md (and AGENTS.md) before touching code.
 2. The constraints are the law. Change only with explicit ceremony and update to this briefing.
 3. All work must be tested against the keyboard simulator in tests/ before PR.
 4. The v0 demo in app/ is the reference feeling to preserve or improve upon.
-5. Update DECISIONS.md and this file after any significant change.
+5. **Multi-agent work**: Follow `docs/BRANCHING-STRATEGY.md` exactly. Use the `branch-manager` skill for all branch operations. Never push to `main` directly.
+6. Update DECISIONS.md and this file after any significant change.
 
 ---
 
