@@ -140,3 +140,21 @@
 - Move the generation call into a proper sidecar / native process in future stacks.
 
 **Amendment (same session)**: Explicit user direction — NO local models (Ollama etc.). All LLM question generation must go through the Grok Build CLI. The proxy was rewritten to `subprocess` the `grok` binary. The rest of the architecture (async, fallback, same trigger, zero UI noise) remains identical.
+
+---
+
+## 2026-05-26 Hyperminimalism UI Enhancement for Socratic Writer (Design ID 5ac1b8e3)
+
+**Decision**: Land the hyperminimalism UI enhancement design document and execute its PR Plan (6 sequenced PRs behind HYPERMINIMAL flag with mandatory real-writing validation gate).
+
+**Context**: v0 demo use revealed persistent micro-chrome in `app/socratic-writer.html` (header + live metrics, 280px labeled sidebar, blinking end-marker, placeholder, etc.) that violated the hyper interpretation of VISION ("the interface must disappear") and CONSTRAINTS §4 (zero visual clutter, no word counts/metrics during writing, no auto-moving elements).
+
+**Rationale**: The design (produced via full design-doc-writer/reviewer loop to 0 open issues) proposes only deletions + one minimal transient question block (label-free, low-opacity, flow-sibling, recedes naturally per explicit no-auto-scroll Viewport & Scroll Contract). All 8 Key Decisions and the implementation plan rigorously preserve the append-only contract, space-bar sole meta-action, non-blocking Socratic behavior, and "pure forward-moving thought" litmus test. Net reduction of ~150-220 LOC in the reference HTML.
+
+**Alternatives Considered**:
+- Keep thin persistent gutter or bottom overlay — rejected for introducing permanent visual weight or overlap risks.
+- More aggressive removal of Socratic questions themselves — rejected; violates VISION/INTERACTION-MODEL contract for the one allowed meta-action feedback.
+
+**Revisit Trigger**: Real writers using the hyperminimal surface for 10+ hours report that any remaining element (e.g. the transient block or lack of visual anchor) measurably harms flow or discoverability of the space bar.
+
+**References**: Full design at `docs/HYPERMINIMALISM-UI-ENHANCEMENT.md` (includes PR Plan, Mermaid diagrams, before/after code, risks, and the 5 Open Questions to resolve via prototype).
