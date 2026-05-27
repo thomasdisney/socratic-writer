@@ -74,7 +74,7 @@ class SocraticWriterSimulator:
     def _correct_last_completed_word(self) -> None:
         """Mirror of JS correctLastCompletedWord — only acts on word + terminator at end."""
         import re
-        m = re.search(r'(\b)([a-z]{3,})([\s\n.,;:!?)'"\]])$', self.current_text)
+        m = re.search(r'(\b)([a-z]{3,})([\s\n.,;:!?)"\'\]]+)$', self.current_text)
         if not m:
             return
         word = m.group(2)
@@ -145,7 +145,7 @@ class SocraticWriterSimulator:
         # Normal printable character (including shifted)
         if len(key) == 1 and not ctrl and not meta:
             self.current_text += key
-            if key in ' \n.,;:!?':
+            if key in ' \n.,;:!?)"\' ]':
                 self._correct_last_completed_word()
             self.last_action_was_hold = False
             return 'INSERTED'
@@ -164,7 +164,7 @@ class SocraticWriterSimulator:
     def handle_composition_end(self, text: str) -> str:
         if text and (self.is_at_end() or len(self.current_text) == 0):
             self.current_text += text
-            if text and text[-1] in ' \n.,;:!?':
+            if text and text[-1] in ' \n.,;:!?)"\' ]':
                 self._correct_last_completed_word()
             else:
                 self._correct_trailing_word()
@@ -247,7 +247,6 @@ def run_tests() -> Tuple[int, int, List[str]]:
     sim.handle_keydown('h')
     sim.handle_keydown('e')
     sim.handle_keydown('l')
-    sim.handle_keydown('l')
     sim.handle_keydown('o')
     sim.handle_keydown(' ')
     sim.handle_keydown('w')
@@ -281,8 +280,8 @@ def run_tests() -> Tuple[int, int, List[str]]:
     sim.is_composing = True
     sim.handle_keydown('c')  # should be ignored while composing
     sim.is_composing = False
-    sim.handle_composition_end("\xc3\xa7")
-    test("composition", sim.get_text() == "ab\xc3\xa7", f"got: {sim.get_text()!r}")
+    sim.handle_composition_end("ç")
+    test("composition", sim.get_text() == "abç", f"got: {sim.get_text()!r}")
 
     # --- Ctrl/Meta editing combos blocked ---
     sim.reset()
@@ -325,8 +324,8 @@ def run_tests() -> Tuple[int, int, List[str]]:
     sim.is_composing = True
     sim.handle_keydown('~')  # dead key simulation
     sim.is_composing = False
-    sim.handle_composition_end("ca\u0303")
-    test("realistic-composition", "ca\u0303" in sim.get_text())
+    sim.handle_composition_end("cã")
+    test("realistic-composition", "cã" in sim.get_text())
 
     # --- Rapid space taps must never falsely trigger hold logic ---
     sim.reset()
@@ -400,7 +399,37 @@ def run_tests() -> Tuple[int, int, List[str]]:
     test("autocorrect-on-hold-trailing", sim.get_text() == "The and was that",
          f"got: {sim.get_text()!r}")
 
-    total_tests = 26
+    # --- Fast autocorrect on bare typo immediately followed by Enter (paragraph boundary) ---
+    # This was corrupting text (e.g. "teh\n\n" -> "tthe\n") due to $ + multi-\n interaction
+    sim.reset()
+    for ch in "This is teh":
+        sim.handle_keydown(ch)
+    sim.handle_keydown('Enter')
+    test("autocorrect-on-enter-bare-typo", sim.get_text() == "This is the\n\n",
+         f"got: {sim.get_text()!r}")
+
+    # --- Fast autocorrect works for punctuation terminators too (., ! ? etc) ---
+    sim.reset()
+    for ch in "I saw teh.":
+        sim.handle_keydown(ch)
+    test("autocorrect-on-punct", sim.get_text() == "I saw the.",
+         f"got: {sim.get_text()!r}")
+
+    # --- No false positive on uppercase or non-typo or mid-word ---
+    sim.reset()
+    for ch in "The Teh adnfoo ":
+        sim.handle_keydown(ch)
+    test("autocorrect-no-false-positive", sim.get_text() == "The Teh adnfoo ",
+         f"got: {sim.get_text()!r}")
+
+    # --- Fast autocorrect triggers on quote terminator too (now that dispatch is consistent) ---
+    sim.reset()
+    for ch in 'said "teh"':
+        sim.handle_keydown(ch)
+    test("autocorrect-on-quote-term", sim.get_text() == 'said "the"',
+         f"got: {sim.get_text()!r}")
+
+    total_tests = 30
     passed_count = total_tests - len(failures)
 
     return passed_count, len(failures), failures
@@ -410,7 +439,7 @@ if __name__ == "__main__":
     import sys
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
 
-    print("=== Socratic Writer Keyboard Robustness Simulator (26 cases) ===\n")
+    print("=== Socratic Writer Keyboard Robustness Simulator (30 cases) ===\n")
     passed, failed, failures = run_tests()
 
     print(f"Results: {passed} passed, {failed} failed\n")
@@ -421,8 +450,8 @@ if __name__ == "__main__":
             print(" -", f)
 
     if failed == 0:
-        print("\u2713 ALL TESTS PASSED — input model is robust.")
+        print("✓ ALL TESTS PASSED — input model is robust.")
     else:
-        print("\u2717 Some tests failed.")
+        print("✗ Some tests failed.")
 
     print("\nUsage: python3 tests/keyboard_simulator.py [--verbose]")

@@ -1,0 +1,4 @@
+#!/bin/bash
+# cc: Socratic Writer optimized Grok launch (YOLO = extreme auto-approve / dangerously-skip-permissions mode)
+# Full project context loads automatically because we cd to writer root (AGENTS.md + docs/ discovered by Grok)
+cd "$(dirname "$0")/.." && exec grok --yolo "$@"
