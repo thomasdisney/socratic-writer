@@ -1,0 +1,3 @@
+Preserve src/ directory for future core implementation (native, TUI, or Rust/Python modules).
+
+Do not remove this file.

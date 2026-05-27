@@ -1,0 +1,3 @@
+Preserve scripts/ directory for future automation, build, analysis, or deployment scripts.
+
+Do not remove this file.

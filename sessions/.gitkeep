@@ -1,0 +1,3 @@
+Preserve sessions/ directory for future multi-session or multi-notebook writing data and metadata.
+
+Do not remove this file.
