@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Socratic Writer
+Comment=Ultra-minimalist distraction-free writing with Socratic reflection
+Exec=python3 /home/demo/socratic-writer/launch.py
+Icon=accessories-text-editor
+Terminal=true
+Type=Application
+Categories=Office;Utility;TextEditor;
+StartupNotify=true
+Keywords=writing;minimal;focus;creative;socratic;distraction-free;

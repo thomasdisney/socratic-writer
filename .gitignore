@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+target/
+vendor/
+*.egg-info/
+
+# Build artifacts
+dist/
+build/
+*.exe
+*.app
+
+# Local LLM models (often large)
+models/
+*.gguf
+*.bin
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+.env
+*.pem
+secrets/
+
+# Session data that shouldn't be shared
+*.log
+*.tmp
+
+# Future: compiled prompts or caches
+prompts/cache/
