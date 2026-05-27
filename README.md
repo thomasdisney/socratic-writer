@@ -22,6 +22,20 @@
 
 ---
 
+## GitHub
+
+**Primary repository**: https://github.com/thomasdisney/socratic-writer
+
+This project is developed with heavy multi-agent assistance. See:
+
+- `AGENTS.md` — Mandatory instructions for all AI agents and orchestrators
+- `docs/BRANCHING-STRATEGY.md` — How branches, PRs, and parallel agent worktrees are managed
+- The `branch-manager` skill (in `~/.grok/bundled/skills/branch-manager/`) owns branch creation, naming, and cleanup
+
+All changes to `main` arrive via Pull Request. Direct pushes are forbidden.
+
+---
+
 ## Current Status
 
 **Phase**: Usable v0 demo complete (running)
