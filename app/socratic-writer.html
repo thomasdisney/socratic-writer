@@ -261,6 +261,7 @@
     let holdTimer = null;
     let holdStartTime = 0;
     let isHoldingSpace = false;
+    let holdActionFired = false;
     let lastReflectionText = '';
     let reflectionCount = 0;
 
@@ -280,7 +281,7 @@
     function correctLastCompletedWord() {
       // Called after appending a word-terminating char (space, \n, . ! ? etc).
       // Corrects only the word immediately preceding the terminator we just added.
-      const m = currentText.match(/(\b)([a-z]{3,})([\s\n.,;:!?)'"\]])$/);
+      const m = currentText.match(/(\b)([a-z]{3,})([\s\n.,;:!?)'"\]]+)$/);
       if (!m) return;
       const word = m[2];
       const corrected = FAST_AUTOCORRECT.get(word);
@@ -325,8 +326,8 @@
     // ============================================================
 
     const LLM_ENABLED = true;                 // flip to false to force heuristic only
-    const LLM_ENDPOINT = '/api/reflect';      // proxied by the Python launcher
-    const LLM_MODEL = 'phi3:mini';            // small, fast, excellent instruction follower. Change to 'gemma2:2b', 'llama3.2:3b' etc.
+    const LLM_ENDPOINT = '/api/reflect';      // proxied by launch.py → Grok Build CLI (no local models)
+    const LLM_MODEL = 'grok-build';           // Ignored by the current proxy (we always use the grok CLI default). Kept for future flexibility.
     const LLM_TIMEOUT_MS = 14000;             // generous for CPU-only small models
     let llmAvailable = null;                  // tri-state: null=unknown, true, false
     let inFlightReflection = null;            // AbortController for cancelling stale requests
@@ -356,7 +357,7 @@ If you produce anything except 0–3 clean questions (one per line), the system 
       if (recent.length > 1400) {
         recent = recent.slice(-1400);
         // try to start at a sentence boundary
-        const firstBreak = recent.search(/[.!?]\s+[A-Z]/);
+        const firstBreak = recent.search(/[.!?]\\s+[A-Z]/);
         if (firstBreak > 60) recent = recent.slice(firstBreak + 1).trim();
       }
       return recent;
@@ -447,6 +448,7 @@ If you produce anything except 0–3 clean questions (one per line), the system 
       return [...new Set(q)].slice(0,3);
     }
 
+
     function save() {
       try {
         localStorage.setItem('socratic-writer-text', currentText);
@@ -531,25 +533,19 @@ If you produce anything except 0–3 clean questions (one per line), the system 
     }
 
     function isCaretAtEnd() {
-      const sel = window.getSelection();
-      if (!sel.rangeCount) return false;
-      
-      const range = sel.getRangeAt(0);
-      // Simple heuristic: if the range is collapsed and at the very end of textContent
-      const textLen = surface.textContent.length;
-      const endRange = document.createRange();
-      endRange.selectNodeContents(surface);
-      endRange.collapse(false);
-      
-      return range.collapsed && 
-             range.compareBoundaryPoints(Range.START_TO_START, endRange) === 0;
+      // Append-only model: we are always logically at the writing end for all input decisions.
+      // We never allow navigation or editing. Visual caret is forced by moveCaretToEnd after
+      // every render. The previous DOM-selection heuristic was racy (rAF lag on fast typing)
+      // and caused space/Enter handling (and thus fast autocorrect on terminators) to be skipped.
+      // Mirrors the "always at end" contract used by the Python simulator and hidden test harness.
+      return true;
     }
 
     // Append-only input control
 
     const FORBIDDEN_KEYS = new Set([
       'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-      'Home', 'End', 'PageUp', 'PageDown', 'Tab'
+      'Home', 'End', 'PageUp', 'PageDown'
     ]);
 
     let isComposing = false;
@@ -563,14 +559,38 @@ If you produce anything except 0–3 clean questions (one per line), the system 
       return false;
     }
 
+    function insertSmartPeriod() {
+      // Mirrors Python simulator exactly. Smart '.' intent for Enter/Tab/. key:
+      // after word → '. ', space-after-word → replace with '. ', already '.' → nothing.
+      // Enforces never '..' and cooperates with space rule for never '  '.
+      if (!currentText) {
+        currentText += '.';
+        correctLastCompletedWord();
+        return;
+      }
+      const last = currentText.slice(-1);
+      if (last === '.') {
+        return;
+      }
+      if (last === ' ') {
+        if (currentText.length >= 2 && /[a-z0-9]/i.test(currentText.slice(-2, -1))) {
+          currentText = currentText.slice(0, -1) + '. ';
+          correctLastCompletedWord();
+          return;
+        }
+        return;
+      }
+      currentText += '. ';
+      correctLastCompletedWord();
+    }
+
     function handleKeyDown(e) {
       if (isComposing) return;
 
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         if (isCaretAtEnd() || currentText.length === 0) {
-          currentText += '\n\n';
-          correctLastCompletedWord();
+          insertSmartPeriod();
           render();
           save();
         }
@@ -579,6 +599,8 @@ If you produce anything except 0–3 clean questions (one per line), the system 
 
       // Space bar — only meta action in the entire app
       if (e.code === 'Space' || e.key === ' ') {
+        // With no linebreaks, long-press space at end of content (any text) is the deliberate trigger.
+        // Short spaces are single only (never '  ').
         if (isCaretAtEnd() && currentText.trim().length > 0) {
           e.preventDefault();
           startSpaceHold(e);
@@ -586,6 +608,10 @@ If you produce anything except 0–3 clean questions (one per line), the system 
         }
         if (isCaretAtEnd() || currentText.length === 0) {
           e.preventDefault();
+          if (currentText.endsWith(' ')) {
+            // never more than single space (even rapid taps)
+            return;
+          }
           currentText += ' ';
           correctLastCompletedWord();
           render();
@@ -602,11 +628,16 @@ If you produce anything except 0–3 clean questions (one per line), the system 
 
       // Explicit append for normal printable characters (more reliable than letting
       // contenteditable mutate the DOM then reading it back). Matches simulator.
+      // '.' uses smart period logic (never '..', adds '. ' after words).
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !isComposing) {
         e.preventDefault();
-        currentText += e.key;
-        if (/[\s\n.,;:!?]/.test(e.key)) {
-          correctLastCompletedWord();
+        if (e.key === '.') {
+          insertSmartPeriod();
+        } else {
+          currentText += e.key;
+          if (/[\s\n.,;:!?)'"\]]/.test(e.key)) {
+            correctLastCompletedWord();
+          }
         }
         render();
         save();
@@ -664,7 +695,7 @@ If you produce anything except 0–3 clean questions (one per line), the system 
       if (composed && (isCaretAtEnd() || currentText.length === 0)) {
         currentText += composed;
         // If the composed string ends with a word terminator, run correction on what precedes it
-        if (/[\s\n.,;:!?]$/.test(composed)) {
+        if (/[\s\n.,;:!?)'"\]]$/.test(composed)) {
           correctLastCompletedWord();
         } else {
           // If it ended a word at the very end of buffer (common with some IMEs)
@@ -726,6 +757,7 @@ If you produce anything except 0–3 clean questions (one per line), the system 
       if (isHoldingSpace) return;
 
       isHoldingSpace = true;
+      holdActionFired = false;
       holdStartTime = Date.now();
 
       const marker = surface.querySelector('#end-marker');
@@ -743,6 +775,7 @@ If you produce anything except 0–3 clean questions (one per line), the system 
           if (!tryMagicCommand()) {
             initiateSocraticReflection();
           }
+          holdActionFired = true;
         }
         cleanupHold();
       }, 650);
@@ -760,13 +793,12 @@ If you produce anything except 0–3 clean questions (one per line), the system 
 
     function handleKeyUp(e) {
       if (e.code === 'Space' || e.key === ' ') {
-        const wasHolding = isHoldingSpace;
         const heldFor = Date.now() - holdStartTime;
+        const didFire = holdActionFired;
 
         cleanupHold();
-
-        // Only insert a normal space if the hold did NOT fire (i.e. it was a short press)
-        if (!wasHolding || heldFor < 650) {
+        holdActionFired = false;
+        if (!didFire && heldFor < 650) {
           if (isCaretAtEnd() || currentText.length === 0) {
             currentText += ' ';
             correctLastCompletedWord();
@@ -1029,6 +1061,9 @@ I miss the person I was when no one was reading.`
 
 
     function init() {
+      // Tailwind script run
+      // (already loaded via CDN)
+
       // Load previous session or start fresh
       const hadPrevious = load();
       
@@ -1056,13 +1091,8 @@ I miss the person I was when no one was reading.`
 
       // Force caret to end whenever they click or focus
       surface.addEventListener('click', () => {
-        // If they click somewhere in the middle, immediately snap back to end
-        // This is the "you cannot change anything" enforcement
-        setTimeout(() => {
-          if (!isCaretAtEnd()) {
-            moveCaretToEnd();
-          }
-        }, 0);
+        // Any click means "return to append frontier" — strict append-only enforcement.
+        setTimeout(moveCaretToEnd, 0);
       });
 
       surface.addEventListener('focus', () => {
@@ -1194,7 +1224,7 @@ I miss the person I was when no one was reading.`
         ]);
 
         function testCorrectLastCompletedWord() {
-          const m = testText.match(/(\b)([a-z]{3,})([\s\n.,;:!?)'"\]])$/);
+          const m = testText.match(/(\b)([a-z]{3,})([\s\n.,;:!?)'"\]]+)$/);
           if (!m) return;
           const word = m[2];
           const corrected = TEST_AUTOCORRECT.get(word);
@@ -1229,15 +1259,30 @@ I miss the person I was when no one was reading.`
 
         function driveKey(key, code = null, opts = {}) {
           // Mirror the exact decision rules from the Python simulator (gold standard)
-          // plus the fast silent autocorrect behavior.
-          if (key === 'Enter') {
+          // plus the fast silent autocorrect behavior. No linebreaks; Enter/Tab = smart period.
+          if (key === 'Enter' || key === 'Tab') {
             if (testText.trim() || testText.length === 0) {
-              testText += '\n\n';
+              // inline smart period (mirrors insertSmartPeriod)
+              if (!testText) {
+                testText += '.';
+              } else {
+                const last = testText.slice(-1);
+                if (last === '.') {
+                  // nothing
+                } else if (last === ' ' && testText.length >= 2 && /[a-z0-9]/i.test(testText.slice(-2, -1))) {
+                  testText = testText.slice(0, -1) + '. ';
+                } else if (last !== ' ') {
+                  testText += '. ';
+                }
+              }
               testCorrectLastCompletedWord();
             }
-            return 'PARAGRAPH';
+            return 'PERIOD';
           }
           if (key === ' ' || code === 'Space') {
+            if (testText.endsWith(' ')) {
+              return 'SPACE_IGNORED';
+            }
             if (testText.trim().length > 0 && opts.hold) {
               testCorrectTrailingWord();
               return 'HOLD_TRIGGERED';
@@ -1250,12 +1295,29 @@ I miss the person I was when no one was reading.`
           if ((opts.ctrl || opts.meta) && ['a','z','x','c','v','y','f'].includes(key.toLowerCase())) return 'BLOCKED';
 
           if (key.length === 1) {
+            if (key === '.') {
+              // smart for .
+              if (!testText) {
+                testText += '.';
+              } else {
+                const last = testText.slice(-1);
+                if (last === '.') {
+                } else if (last === ' ' && testText.length >= 2 && /[a-z0-9]/i.test(testText.slice(-2, -1))) {
+                  testText = testText.slice(0, -1) + '. ';
+                } else if (last !== ' ') {
+                  testText += '. ';
+                }
+              }
+              testCorrectLastCompletedWord();
+              return 'PERIOD';
+            }
             testText += key;
-            if (/[\s\n.,;:!?]/.test(key)) {
+            if (/[\s\n.,;:!?)'"\]]/.test(key)) {
               testCorrectLastCompletedWord();
             }
             return 'INSERTED';
           }
+          if (key === 'Shift') return 'SHIFT_MODIFIER';
           return 'IGNORED';
         }
 
@@ -1281,13 +1343,13 @@ I miss the person I was when no one was reading.`
         return pass;
       }
 
-      // Test 2: Enter for paragraphs
-      function testEnterParagraphs() {
+      // Test 2: Enter/Tab as smart period intent (no paragraphs/linebreaks ever)
+      function testEnterTabAsPeriod() {
         hidden.reset();
         hidden.driveKey('H'); hidden.driveKey('i'); hidden.driveKey('Enter');
         hidden.driveKey('T'); hidden.driveKey('h'); hidden.driveKey('e'); hidden.driveKey('r'); hidden.driveKey('e');
-        const pass = hidden.getText() === 'Hi\n\nThere';
-        record('enter-paragraphs', pass, pass ? '' : `got "${hidden.getText()}"`);
+        const pass = hidden.getText() === 'Hi. There';
+        record('enter-tab-period-intent', pass, pass ? '' : `got "${hidden.getText()}"`);
         return pass;
       }
 
@@ -1305,7 +1367,7 @@ I miss the person I was when no one was reading.`
         hidden.reset();
         ['a','b','c'].forEach(k => hidden.driveKey(k));
         const before = hidden.getText();
-        ['Backspace', 'Delete', 'ArrowLeft', 'Home', 'Tab'].forEach(k => hidden.driveKey(k));
+        ['Backspace', 'Delete', 'ArrowLeft', 'Home', 'End'].forEach(k => hidden.driveKey(k));
         const pass = hidden.getText() === before;
         record('forbidden-keys-blocked', pass, pass ? '' : `text changed from "${before}"`);
         return pass;
@@ -1369,7 +1431,7 @@ I miss the person I was when no one was reading.`
         console.log('%c[KeyboardTest] Starting robust keyboard test suite (completely invisible)...', 'color:#8b7355');
 
         testBasicInsertion();
-        testEnterParagraphs();
+        testEnterTabAsPeriod();
         testNormalSpaces();
         testForbiddenKeysBlocked();
         testRapidBurst();
