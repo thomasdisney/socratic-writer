@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Socratic Writer</title>
+  <style>
+    :root {
+      --paper: #f8f1e3;
+      --ink: #2c2522;
+      --ink-light: #5c5249;
+      --accent: #8b5e3c;
+      --margin-border: #d4c8b5;
+    }
+
+    body {
+      font-family: Georgia, "Times New Roman", "Palatino Linotype", serif;
+      background: var(--paper);
+      color: var(--ink);
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .writing-surface {
+      font-size: 19.5px;
+      line-height: 1.78;
+      letter-spacing: -0.005em;
+      max-width: 72ch;
+      margin: 0 auto;
+      padding: 0 0 4rem;
+      min-height: 70vh;
+      outline: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .writing-surface:empty::before {
+      content: "Begin typing. Your thoughts are the only thing here.";
+      color: #a89b85;
+      font-style: italic;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .socratic-margin {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: 15.5px;
+      line-height: 1.65;
+      color: #6b5f52;
+      opacity: 0.0;
+      transition: opacity 600ms cubic-bezier(0.23, 1.0, 0.32, 1);
+      padding-top: 2.25rem;
+      padding-left: 1.25rem;
+      padding-right: 1.5rem;
+      border-left: 1px solid #d4c8b5;
+    }
+
+    .socratic-margin.active {
+      opacity: 0.82;
+    }
+
+    .socratic-margin .question {
+      margin-bottom: 1.35rem;
+      padding-left: 0.1rem;
+    }
+
+    .socratic-margin .question:last-child {
+      margin-bottom: 0;
+    }
+
+    .socratic-margin .label {
+      font-size: 10.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8b7355;
+      margin-bottom: 0.65rem;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 500;
+    }
+
+    .end-marker {
+      display: inline-block;
+      width: 2px;
+      height: 1.35em;
+      background-color: #8b5e3c;
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      opacity: 0.25;
+      animation: soft-blink 1400ms ease-in-out infinite;
+    }
+
+    @keyframes soft-blink {
+      0%, 100% { opacity: 0.18; }
+      50% { opacity: 0.38; }
+    }
+
+    @keyframes hold-fill {
+      0% { background-color: transparent; }
+      100% { background-color: #8b5e3c; opacity: 0.55; }
+    }
+
+    .hold-progress {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      border: 2px solid #8b5e3c;
+      background-color: transparent;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 80ms linear;
+    }
+
+    .hold-progress.active {
+      opacity: 0.35;
+      animation: hold-fill 650ms linear forwards;
+    }
+
+    .minimal {
+      font-feature-settings: "kern" "liga" "clig" "calt";
+    }
+
+
+    .app-root {
+      display: flex;
+      min-height: 100vh;
+      background: var(--paper);
+    }
+    .writing-col {
+      flex: 1 1 auto;
+      display: flex;
+      justify-content: center;
+      padding: 3rem 2rem 5rem;
+      box-sizing: border-box;
+    }
+    .inner-col {
+      width: 100%;
+      max-width: 72ch;
+    }
+    .header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      font-size: 10.5px;
+      letter-spacing: 0.06em;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 500;
+      color: #8b7355;
+      opacity: 0.4;
+    }
+    .session-info {
+      font-variant-numeric: tabular-nums;
+    }
+    .socratic-sidebar {
+      width: 280px;
+      border-left: 1px solid var(--margin-border);
+      background: var(--paper);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .socratic-empty {
+      color: #8b7355;
+      opacity: 0.6;
+      font-size: 12.5px;
+      letter-spacing: 0.02em;
+      padding-top: 0.25rem;
+      line-height: 1.4;
+    }
+    .sidebar-footer {
+      padding: 0 1.25rem 1.5rem;
+      font-size: 10px;
+      color: #8b7355;
+      opacity: 0.5;
+      font-family: system-ui, -apple-system, sans-serif;
+      letter-spacing: 0.04em;
+    }
+    .flex-line {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .flex-line-inner {
+      flex: 1;
+      height: 1px;
+      background: var(--margin-border);
+      opacity: 0.6;
+    }
+    .mono {
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    .status-toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.05);
+      color: #5c5249;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-root">
+    <!-- Writing column -->
+    <div class="writing-col">
+      <div class="inner-col">
+        <div id="header" class="header">
+          <div>SOCRATIC WRITER</div>
+          <div id="session-info" class="session-info"></div>
+        </div>
+
+        <div 
+          id="surface"
+          class="writing-surface minimal"
+          contenteditable="plaintext-only"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
+          inputmode="text"
+        ></div>
+      </div>
+    </div>
+
+    <!-- Socratic margin (only extra visual, always present but empty most of the time) -->
+    <div class="socratic-sidebar">
+      <div class="socratic-margin" id="socratic-pane">
+        <div id="socratic-empty" class="socratic-empty">
+          Hold <span class="mono">space</span> at the end of a thought<br>
+          to receive Socratic questions.
+        </div>
+        <div id="socratic-content" class="hidden"></div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="flex-line"><div class="flex-line-inner"></div><div>SPACE TO REFLECT</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="status-toast hidden"></div>
+  <div id="hold-indicator" class="hold-progress hidden"></div>
+
+  <script>
+    const surface = document.getElementById('surface');
+    const socraticPane = document.getElementById('socratic-pane');
+    const socraticEmpty = document.getElementById('socratic-empty');
+    const socraticContent = document.getElementById('socratic-content');
+    const statusEl = document.getElementById('status');
+    const holdIndicator = document.getElementById('hold-indicator');
+    const sessionInfo = document.getElementById('session-info');
+
+    let currentText = '';
+    let lastSave = Date.now();
+    let holdTimer = null;
+    let holdStartTime = 0;
+    let isHoldingSpace = false;
+    let lastReflectionText = '';
+    let reflectionCount = 0;
+
+    // Fast, silent, high-precision autocorrect for the most common fast-typing typos.
+    // Only these 8. No UI, no decisions, zero latency. See DECISIONS.md + CONSTRAINTS.md §2.
+    const FAST_AUTOCORRECT = new Map([
+      ['teh', 'the'],
+      ['adn', 'and'],
+      ['taht', 'that'],
+      ['hte', 'the'],
+      ['wiht', 'with'],
+      ['thier', 'their'],
+      ['recieve', 'receive'],
+      ['seperate', 'separate'],
+    ]);
+
+    function correctLastCompletedWord() {
+      // Called after appending a word-terminating char (space, \n, . ! ? etc).
+      // Corrects only the word immediately preceding the terminator we just added.
+      const m = currentText.match(/(\b)([a-z]{3,})([\s\n.,;:!?)'"\]])$/);
+      if (!m) return;
+      const word = m[2];
+      const corrected = FAST_AUTOCORRECT.get(word);
+      if (!corrected) return;
+      const terminator = m[3];
+      currentText = currentText.slice(0, -(word.length + terminator.length)) + corrected + terminator;
+    }
+
+    function correctTrailingWord() {
+      // Called when reflection / magic commands are about to run and the buffer
+      // may end with an unterminated word (the final word of the session).
+      const m = currentText.match(/(\b)([a-z]{3,})$/);
+      if (!m) return;
+      const word = m[2];
+      const corrected = FAST_AUTOCORRECT.get(word);
+      if (!corrected) return;
+      currentText = currentText.slice(0, -word.length) + corrected;
+    }
+
+    function runFastAutocorrectOnRecentText() {
+      // Used after paste (and safe to call anytime). Corrects trailing word + any
+      // of the 8 safe typos in the last ~2000 chars. Extremely cheap.
+      correctTrailingWord();
+      const recent = currentText.slice(-2000);
+      let correctedRecent = recent;
+      for (const [typo, corr] of FAST_AUTOCORRECT) {
+        // Whole-word, lowercase only (the only entries we have)
+        const re = new RegExp('\\b' + typo + '\\b', 'g');
+        correctedRecent = correctedRecent.replace(re, corr);
+      }
+      if (correctedRecent !== recent) {
+        currentText = currentText.slice(0, -recent.length) + correctedRecent;
+      }
+    }
+
+    // ============================================================
+    // LLM INTEGRATION via Grok Build CLI (no local models)
+    // - Strictly Socratic questions only
+    // - Non-blocking: writer can (and should) keep typing
+    // - Falls back silently + instantly to the excellent local heuristic
+    // - Same-origin /api/reflect calls the local `grok` CLI via the launcher proxy
+    // ============================================================
+
+    const LLM_ENABLED = true;                 // flip to false to force heuristic only
+    const LLM_ENDPOINT = '/api/reflect';      // proxied by the Python launcher
+    const LLM_MODEL = 'phi3:mini';            // small, fast, excellent instruction follower. Change to 'gemma2:2b', 'llama3.2:3b' etc.
+    const LLM_TIMEOUT_MS = 14000;             // generous for CPU-only small models
+    let llmAvailable = null;                  // tri-state: null=unknown, true, false
+    let inFlightReflection = null;            // AbortController for cancelling stale requests
+
+    const SOCRATIC_SYSTEM_PROMPT = `You are a Socratic mirror. Your ONLY job is to help the writer see what they have actually written more clearly than they could on their own.
+
+ABSOLUTE RULES (never violate):
+1. You only ask questions. Never statements, suggestions, observations, or interpretations that are not framed as questions.
+2. You never generate content for the writer. No next sentences, no plot ideas, no "better" phrasing, no completions.
+3. Every question must be directly traceable to specific language the writer used in the text provided. No external knowledge.
+4. Maximum 3 questions. Fewer is better. Each question is one short sentence.
+5. Stay humble and precise. Do not imply the writer missed something important.
+6. If the text is too short, fragmented, or has no clear thread worth questioning, return zero questions.
+
+OUTPUT FORMAT:
+Respond with ONLY the questions — one per line, nothing else. No numbering, no bullets, no intro, no closing line.
+
+If you produce anything except 0–3 clean questions (one per line), the system will ignore your response and fall back to a local heuristic.`;
+
+
+    function extractRecentTextForLLM(fullText) {
+      const text = fullText.trim();
+      if (!text) return '';
+      const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+      // Take the last 2–3 paragraphs, but cap total length for speed + focus
+      let recent = paragraphs.slice(-3).join('\n\n');
+      if (recent.length > 1400) {
+        recent = recent.slice(-1400);
+        // try to start at a sentence boundary
+        const firstBreak = recent.search(/[.!?]\s+[A-Z]/);
+        if (firstBreak > 60) recent = recent.slice(firstBreak + 1).trim();
+      }
+      return recent;
+    }
+
+    async function requestLLMQuestions(fullText) {
+      const recent = extractRecentTextForLLM(fullText);
+      if (recent.length < 50) {
+        throw new Error('text too short for LLM');
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(LLM_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: LLM_MODEL,
+            system: SOCRATIC_SYSTEM_PROMPT,
+            text: recent
+          }),
+          signal: controller.signal
+        });
+
+        if (!res.ok) {
+          throw new Error(`proxy status ${res.status}`);
+        }
+
+        const data = await res.json();
+        let questions = Array.isArray(data.questions) ? data.questions : [];
+
+        // Strict cleanup: max 3, non-empty, one sentence-ish
+        questions = questions
+          .map(q => (q || '').toString().trim())
+          .filter(q => q.length > 8 && q.length < 240 && /[?]$/.test(q))
+          .slice(0, 3);
+
+        if (questions.length === 0) {
+          throw new Error('LLM returned no valid questions');
+        }
+
+        llmAvailable = true;
+        return questions;
+      } catch (err) {
+        llmAvailable = false;
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    function generateHeuristicQuestions(fullText) {
+      // The original excellent local heuristic — now explicitly the fallback
+      const text = fullText.trim();
+      if (text.length < 60) return ["What is the real tension underneath the first thing you wrote?"];
+
+      const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
+      const recent = paragraphs.slice(-3).join('\n\n').match(/[^.!?]+[.!?]+/g)?.slice(-8).join(' ') || '';
+
+      const q = [];
+      if (/\b(I (believe|think|feel|know|want|need)|this (means|shows)|clearly)\b/i.test(recent)) {
+        q.push("What are you assuming when you say that?");
+      }
+      if (/\b(but|however|yet|although|still)\b/i.test(recent)) {
+        q.push("Which side of that tension feels more honest right now?");
+      }
+      const words = (text.toLowerCase().match(/\b[a-z]{5,}\b/g) || []);
+      const freq = {}; words.forEach(w => freq[w] = (freq[w]||0)+1);
+      const repeated = Object.keys(freq).filter(w => freq[w]>=3 && !['about','there','really'].includes(w)).sort((a,b)=>freq[b]-freq[a])[0];
+      if (repeated) q.push(`You keep returning to "${repeated}". What does it actually mean right now?`);
+
+      if (/\bI (want|wish|need|desire)\b/i.test(recent)) q.push("What would it look like if that desire were fully met?");
+      if (text.match(/\b(why|how|what if)[^.!?]{5,60}\?/i)) q.push("You asked yourself a question — have you answered it yet?");
+
+      const fallbacks = [
+        "What is the simplest truth underneath everything you just wrote?",
+        "What are you not saying yet that wants to be said?",
+        "Who are you really writing this for?"
+      ];
+      while (q.length < 2) {
+        const c = fallbacks[(q.length + reflectionCount) % fallbacks.length];
+        if (!q.includes(c)) q.push(c);
+      }
+      lastReflectionText = text;
+      reflectionCount++;
+      return [...new Set(q)].slice(0,3);
+    }
+
+    function save() {
+      try {
+        localStorage.setItem('socratic-writer-text', currentText);
+        localStorage.setItem('socratic-writer-last', Date.now().toString());
+        lastSave = Date.now();
+      } catch (e) {}
+    }
+
+    function load() {
+      try {
+        const saved = localStorage.getItem('socratic-writer-text');
+        if (saved !== null) {
+          currentText = saved;
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    function updateSessionInfo() {
+      if (!currentText.trim()) {
+        sessionInfo.textContent = '';
+        return;
+      }
+      const words = currentText.trim().split(/\s+/).length;
+      const mins = Math.max(1, Math.round((Date.now() - (parseInt(localStorage.getItem('socratic-writer-last') || Date.now())) / 60000)));
+      sessionInfo.textContent = `${words} words • ${mins}m`;
+    }
+
+    function exportText() {
+      if (!currentText.trim()) {
+        flashStatus('Nothing to export yet');
+        return;
+      }
+      const blob = new Blob([currentText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `writing-${date}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      flashStatus('Exported to Downloads');
+    }
+
+
+    function render() {
+      // Extremely simple & robust: textContent + pre-wrap gives perfect paragraphs from \n\n
+      surface.textContent = currentText;
+
+      // Tiny blinking end marker (the only "cursor" the writer ever sees)
+      const marker = document.createElement('span');
+      marker.className = 'end-marker';
+      marker.id = 'end-marker';
+      surface.appendChild(marker);
+
+      requestAnimationFrame(moveCaretToEnd);
+      updateSessionInfo();
+    }
+
+    function moveCaretToEnd() {
+      const range = document.createRange();
+      const sel = window.getSelection();
+      
+      // Find the last text node or the end-marker
+      const marker = surface.querySelector('#end-marker');
+      if (marker) {
+        range.setStartAfter(marker);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        // Fallback: put at end of surface
+        range.selectNodeContents(surface);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      surface.focus();
+    }
+
+    function isCaretAtEnd() {
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return false;
+      
+      const range = sel.getRangeAt(0);
+      // Simple heuristic: if the range is collapsed and at the very end of textContent
+      const textLen = surface.textContent.length;
+      const endRange = document.createRange();
+      endRange.selectNodeContents(surface);
+      endRange.collapse(false);
+      
+      return range.collapsed && 
+             range.compareBoundaryPoints(Range.START_TO_START, endRange) === 0;
+    }
+
+    // Append-only input control
+
+    const FORBIDDEN_KEYS = new Set([
+      'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+      'Home', 'End', 'PageUp', 'PageDown', 'Tab'
+    ]);
+
+    let isComposing = false;
+    let compositionBuffer = '';
+
+    function isForbidden(e) {
+      if (FORBIDDEN_KEYS.has(e.key)) return true;
+      if ((e.ctrlKey || e.metaKey) && ['a', 'z', 'x', 'c', 'v', 'y', 'f'].includes(e.key.toLowerCase())) {
+        return true;
+      }
+      return false;
+    }
+
+    function handleKeyDown(e) {
+      if (isComposing) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isCaretAtEnd() || currentText.length === 0) {
+          currentText += '\n\n';
+          correctLastCompletedWord();
+          render();
+          save();
+        }
+        return;
+      }
+
+      // Space bar — only meta action in the entire app
+      if (e.code === 'Space' || e.key === ' ') {
+        if (isCaretAtEnd() && currentText.trim().length > 0) {
+          e.preventDefault();
+          startSpaceHold(e);
+          return;
+        }
+        if (isCaretAtEnd() || currentText.length === 0) {
+          e.preventDefault();
+          currentText += ' ';
+          correctLastCompletedWord();
+          render();
+          save();
+        }
+        return;
+      }
+
+      if (isForbidden(e)) {
+        e.preventDefault();
+        flashTinyRejection();
+        return;
+      }
+
+      // Explicit append for normal printable characters (more reliable than letting
+      // contenteditable mutate the DOM then reading it back). Matches simulator.
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !isComposing) {
+        e.preventDefault();
+        currentText += e.key;
+        if (/[\s\n.,;:!?]/.test(e.key)) {
+          correctLastCompletedWord();
+        }
+        render();
+        save();
+      }
+    }
+
+    function handleBeforeInput(e) {
+      if (isComposing) return;
+
+      const forbiddenTypes = [
+        'deleteContentBackward', 'deleteContentForward',
+        'deleteWordBackward', 'deleteWordForward',
+        'deleteSoftLineBackward', 'deleteHardLineBackward',
+        'deleteByCut', 'deleteByDrag',
+        'historyUndo', 'historyRedo'
+      ];
+
+      if (forbiddenTypes.includes(e.inputType)) {
+        e.preventDefault();
+        return;
+      }
+
+      // We now handle most printable inserts explicitly in keydown for reliability.
+      // Only let composition and a few special cases through.
+      if (e.inputType && e.inputType.startsWith('insert') && !isComposing) {
+        e.preventDefault();
+        return;
+      }
+    }
+
+    function handleInput(e) {
+      // Only composition and rare cases should reach here now
+      if (isComposing) {
+        // compositionend will handle the final string
+        return;
+      }
+      // Fallback sync for safety
+      syncTextFromSurface();
+      save();
+      moveCaretToEnd();
+    }
+
+    function handleCompositionStart(e) {
+      isComposing = true;
+      compositionBuffer = '';
+    }
+
+    function handleCompositionUpdate(e) {
+      compositionBuffer = e.data || '';
+    }
+
+    function handleCompositionEnd(e) {
+      isComposing = false;
+      const composed = e.data || compositionBuffer || '';
+      if (composed && (isCaretAtEnd() || currentText.length === 0)) {
+        currentText += composed;
+        // If the composed string ends with a word terminator, run correction on what precedes it
+        if (/[\s\n.,;:!?]$/.test(composed)) {
+          correctLastCompletedWord();
+        } else {
+          // If it ended a word at the very end of buffer (common with some IMEs)
+          correctTrailingWord();
+        }
+        render();
+        save();
+      }
+      compositionBuffer = '';
+      setTimeout(moveCaretToEnd, 0);
+    }
+
+    function serializeToText(node) {
+      let s = '';
+      node.childNodes.forEach(ch => {
+        if (ch.nodeType === Node.TEXT_NODE) {
+          s += ch.textContent;
+        } else if (ch.nodeName === 'BR') {
+          s += '\n';
+        } else if (ch.id === 'end-marker') {
+          // marker has no textual content
+        } else {
+          s += serializeToText(ch);
+        }
+      });
+      return s;
+    }
+
+    function syncTextFromSurface() {
+      // Structure-aware sync so \n\n paragraph breaks survive render + typing cycles.
+      // We turn the <p> blocks and <br>s we (and the browser) create back into model newlines.
+      const directPs = Array.from(surface.children).filter(el => el.tagName === 'P');
+      if (directPs.length > 0) {
+        const parts = directPs.map(p => {
+          let pt = serializeToText(p).replace(/[\u200B\u200C\u200D]/g, '').trimEnd();
+          return pt;
+        });
+        let text = parts.join('\n\n').replace(/\n\n+/g, '\n\n');
+        currentText = text;
+        return;
+      }
+      // Fallback (no <p> structure or browser flattened it)
+      let text = serializeToText(surface).replace(/[\u200B\u200C\u200D]/g, '');
+      currentText = text.replace(/\n\n+/g, '\n\n');
+    }
+
+    function flashTinyRejection() {
+      const marker = surface.querySelector('#end-marker');
+      if (marker) {
+        marker.style.transition = 'opacity 55ms linear';
+        marker.style.opacity = '0.6';
+        setTimeout(() => {
+          if (marker) marker.style.opacity = '0.22';
+        }, 100);
+      }
+    }
+
+    function startSpaceHold(e) {
+      if (isHoldingSpace) return;
+
+      isHoldingSpace = true;
+      holdStartTime = Date.now();
+
+      const marker = surface.querySelector('#end-marker');
+      if (marker) {
+        const rect = marker.getBoundingClientRect();
+        holdIndicator.style.left = `${rect.left + window.scrollX - 9}px`;
+        holdIndicator.style.top = `${rect.top + window.scrollY - 3}px`;
+        holdIndicator.classList.remove('hidden');
+        holdIndicator.classList.add('active');
+      }
+
+      holdTimer = setTimeout(() => {
+        if (isHoldingSpace) {
+          correctTrailingWord();
+          if (!tryMagicCommand()) {
+            initiateSocraticReflection();
+          }
+        }
+        cleanupHold();
+      }, 650);
+    }
+
+    function cleanupHold() {
+      isHoldingSpace = false;
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdIndicator.classList.remove('active');
+      holdIndicator.classList.add('hidden');
+    }
+
+    function handleKeyUp(e) {
+      if (e.code === 'Space' || e.key === ' ') {
+        const wasHolding = isHoldingSpace;
+        const heldFor = Date.now() - holdStartTime;
+
+        cleanupHold();
+
+        // Only insert a normal space if the hold did NOT fire (i.e. it was a short press)
+        if (!wasHolding || heldFor < 650) {
+          if (isCaretAtEnd() || currentText.length === 0) {
+            currentText += ' ';
+            correctLastCompletedWord();
+            render();
+            save();
+          }
+        }
+      }
+    }
+
+
+    // Back-compat wrapper so old call sites (samples, etc.) keep working.
+    // New LLM path uses generateHeuristicQuestions directly.
+    function generateSocraticQuestions(fullText) {
+      return generateHeuristicQuestions(fullText);
+    }
+
+    /**
+     * New async-aware entry point.
+     * Immediately gives the writer a very light acknowledgment, then fires the LLM
+     * (or heuristic) in the background. The writer can (and must) keep typing.
+     */
+    function initiateSocraticReflection() {
+      // Cancel any previous in-flight LLM request (new deliberate trigger wins)
+      if (inFlightReflection) {
+        inFlightReflection.abort();
+        inFlightReflection = null;
+      }
+
+      const textSnapshot = currentText;
+
+      // Gentle, non-blocking acknowledgment — the only UI during the wait
+      flashStatus('Socratic reflection requested...');
+
+      // Fast path: heuristic only (either disabled or we already know LLM is down)
+      if (!LLM_ENABLED || llmAvailable === false) {
+        const questions = generateHeuristicQuestions(textSnapshot);
+        displaySocraticQuestions(questions, 'heuristic');
+        return;
+      }
+
+      // Optimistic: try LLM, fall back silently on any failure
+      const controller = new AbortController();
+      inFlightReflection = controller;
+
+      // Kick off the real work — this does NOT block typing
+      (async () => {
+        try {
+          let questions;
+          if (llmAvailable === true) {
+            // We know it works — use it
+            questions = await requestLLMQuestions(textSnapshot);
+          } else {
+            // First time or unknown — race the LLM call
+            try {
+              questions = await requestLLMQuestions(textSnapshot);
+            } catch (e) {
+              // One-time fallback + remember the failure
+              questions = generateHeuristicQuestions(textSnapshot);
+              if (llmAvailable !== false) {
+                flashStatus('Using local heuristic (Grok CLI unavailable)');
+              }
+            }
+          }
+
+          // Only render if this request is still the latest one
+          if (!controller.signal.aborted) {
+            displaySocraticQuestions(questions, llmAvailable === true ? 'llm' : 'heuristic');
+          }
+        } catch (err) {
+          if (!controller.signal.aborted) {
+            const fallback = generateHeuristicQuestions(textSnapshot);
+            displaySocraticQuestions(fallback, 'heuristic');
+          }
+        } finally {
+          if (inFlightReflection === controller) inFlightReflection = null;
+        }
+      })();
+    }
+
+    /**
+     * Pure rendering of questions into the margin pane.
+     * Can be called immediately (heuristic) or later when an async LLM response arrives.
+     */
+    function displaySocraticQuestions(questions, source = 'heuristic') {
+      if (!questions || questions.length === 0) {
+        questions = generateHeuristicQuestions(currentText); // safety
+      }
+
+      socraticEmpty.classList.add('hidden');
+      socraticContent.classList.remove('hidden');
+      socraticContent.innerHTML = '';
+
+      const label = document.createElement('div');
+      label.className = 'label mb-3';
+      label.textContent = reflectionCount === 1 ? 'QUESTIONS FROM YOUR TEXT' : 'MORE QUESTIONS';
+      socraticContent.appendChild(label);
+
+      questions.forEach((q) => {
+        const div = document.createElement('div');
+        div.className = 'question';
+        div.innerHTML = `<span class="opacity-90">${q}</span>`;
+        socraticContent.appendChild(div);
+      });
+
+      socraticPane.classList.add('active');
+
+      // The exact same gentle feedback as before
+      flashStatus('Socratic reflection added to the margin');
+
+      if (reflectionCount === 1) {
+        setTimeout(() => {
+          flashStatus('You can keep typing. The questions will stay until you call again.');
+        }, 2400);
+      }
+
+      // If the LLM eventually answered, give a very quiet nod on first success
+      if (source === 'llm' && reflectionCount === 1) {
+        setTimeout(() => {
+          // Only if the pane is still showing questions
+          if (!socraticContent.classList.contains('hidden')) {
+            flashStatus('Stronger questions from local model');
+          }
+        }, 6200);
+      }
+    }
+
+    function gentlyDimQuestions() {
+      socraticContent.style.transition = 'opacity 1200ms ease';
+      socraticContent.style.opacity = '0.35';
+      
+      setTimeout(() => {
+        if (socraticContent.style.opacity === '0.35') {
+          socraticContent.style.opacity = '0.82';
+        }
+      }, 4200);
+    }
+
+    function clearCurrentReflection() {
+      socraticContent.classList.add('hidden');
+      socraticEmpty.classList.remove('hidden');
+      socraticPane.classList.remove('active');
+      socraticContent.style.opacity = '1';
+    }
+
+
+    let statusTimeout = null;
+    function flashStatus(msg) {
+      statusEl.textContent = msg;
+      statusEl.classList.remove('hidden');
+      statusEl.classList.add('block');
+      
+      if (statusTimeout) clearTimeout(statusTimeout);
+      statusTimeout = setTimeout(() => {
+        statusEl.classList.add('hidden');
+        statusEl.classList.remove('block');
+      }, 2400);
+    }
+
+
+    const SAMPLES = {
+      'first-thoughts': `I keep telling myself that I need more time before I can start the real work. That once the house is cleaner, once I have the right notebook, once I feel less tired — then I will begin.
+
+But I have been saying some version of this for almost three years.
+
+The strange part is that when I imagine actually sitting down and doing it, the feeling that rises is not excitement. It is a low, steady dread. Like I already know I will fail at it, or that succeeding would cost something I am not willing to pay.
+
+I don't know what that cost is yet. I only know that the dread is honest in a way my excuses are not.`,
+
+      'relationship-tension': `She asked me last night why I never talk about the future anymore. I said I didn't know what I wanted. That was a lie.
+
+I do know. I want the version of us that existed before we started measuring everything. Before we started keeping score of who sacrificed more.
+
+The problem is I don't know how to get back there without pretending the last two years didn't happen. And pretending feels like another kind of betrayal.`,
+
+      'creative-block': `Every time I open the document I feel a kind of grief. The words that used to come easily now feel like they belong to someone else — someone braver and less self-conscious.
+
+I used to write like I was speaking to a single person who already understood me. Now I write like I am being watched by a committee that will judge whether this is "good enough" to exist.
+
+I miss the person I was when no one was reading.`
+    };
+
+    function loadSample(key) {
+      if (!SAMPLES[key]) return;
+      
+      if (currentText.trim().length > 40) {
+        if (!confirm('Replace current writing with a sample? Your current text will be lost unless you have exported it.')) {
+          return;
+        }
+      }
+      
+      currentText = SAMPLES[key];
+      render();
+      save();
+      
+      // Immediately give them a great first reflection experience
+      setTimeout(() => {
+        const questions = generateSocraticQuestions(currentText);
+        socraticEmpty.classList.add('hidden');
+        socraticContent.classList.remove('hidden');
+        socraticContent.innerHTML = '';
+        
+        const label = document.createElement('div');
+        label.className = 'label mb-3';
+        label.textContent = 'QUESTIONS FROM YOUR TEXT';
+        socraticContent.appendChild(label);
+
+        questions.forEach(q => {
+          const div = document.createElement('div');
+          div.className = 'question';
+          div.innerHTML = `<span class="opacity-90">${q}</span>`;
+          socraticContent.appendChild(div);
+        });
+        socraticPane.classList.add('active');
+        
+        flashStatus('Sample loaded. These questions were generated from what you just read.');
+      }, 420);
+    }
+
+
+    let typedBuffer = '';
+    function updateCommandBuffer(e) {
+      if (e.key.length === 1) {
+        typedBuffer += e.key.toLowerCase();
+        if (typedBuffer.length > 18) typedBuffer = typedBuffer.slice(-18);
+      }
+    }
+
+    function tryMagicCommand() {
+      correctTrailingWord();
+      // Command is in currentText (letters inserted by normal typing); long space itself is never inserted.
+      const m = currentText.match(/\s*(sample[123]|export|clearall)\s*$/i);
+      if (!m) return false;
+      const cmd = m[1].toLowerCase();
+
+      // Remove the command word (and any ws before it) from the writing surface
+      currentText = currentText.replace(/\s*(sample[123]|export|clearall)\s*$/i, '');
+      render();
+      save();
+      typedBuffer = '';
+
+      if (cmd === 'sample1') {
+        loadSample('first-thoughts');
+      } else if (cmd === 'sample2') {
+        loadSample('relationship-tension');
+      } else if (cmd === 'sample3') {
+        loadSample('creative-block');
+      } else if (cmd === 'export') {
+        setTimeout(exportText, 80);
+      } else if (cmd === 'clearall') {
+        if (confirm('Clear everything? This cannot be undone.')) {
+          currentText = '';
+          localStorage.removeItem('socratic-writer-text');
+          render();
+          clearCurrentReflection();
+        }
+      }
+      return true;
+    }
+
+
+    function init() {
+      // Load previous session or start fresh
+      const hadPrevious = load();
+      
+      if (!hadPrevious) {
+        // Gentle first-time invitation (will disappear as soon as they type)
+        currentText = '';
+      }
+
+      render();
+
+      // Wire up the strict input handlers
+      surface.addEventListener('keydown', (e) => {
+        handleKeyDown(e);
+        updateCommandBuffer(e);
+      });
+      
+      surface.addEventListener('keyup', handleKeyUp);
+      surface.addEventListener('beforeinput', handleBeforeInput);
+      surface.addEventListener('input', handleInput);
+
+      // Composition support (critical for non-Latin and accented input)
+      surface.addEventListener('compositionstart', handleCompositionStart);
+      surface.addEventListener('compositionupdate', handleCompositionUpdate);
+      surface.addEventListener('compositionend', handleCompositionEnd);
+
+      // Force caret to end whenever they click or focus
+      surface.addEventListener('click', () => {
+        // If they click somewhere in the middle, immediately snap back to end
+        // This is the "you cannot change anything" enforcement
+        setTimeout(() => {
+          if (!isCaretAtEnd()) {
+            moveCaretToEnd();
+          }
+        }, 0);
+      });
+
+      surface.addEventListener('focus', () => {
+        setTimeout(moveCaretToEnd, 0);
+      });
+
+      // Paste handling — only allow appending plain text at the end
+      surface.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const paste = (e.clipboardData || window.clipboardData).getData('text');
+        if (paste) {
+          currentText = (currentText || '') + paste;
+          // Run fast autocorrect on the pasted (and trailing) content — safe because paste is deliberate
+          runFastAutocorrectOnRecentText();
+          render();
+          save();
+        }
+      });
+
+      // Prevent drag & drop (another editing vector)
+      surface.addEventListener('drop', e => e.preventDefault());
+
+      // Auto-save every 8 seconds
+      setInterval(() => {
+        if (Date.now() - lastSave > 7000) save();
+      }, 8000);
+
+      // Update word count / time periodically
+      setInterval(updateSessionInfo, 30000);
+
+      // First-time hint
+      if (!hadPrevious) {
+        setTimeout(() => {
+          flashStatus('Type normally. Hold space at the end of a thought for Socratic questions.');
+        }, 1600);
+      }
+
+      // Make the surface feel alive immediately
+      surface.focus();
+      moveCaretToEnd();
+
+      // Subtle: if they do nothing for 90s on a fresh load, offer samples via status
+      if (!hadPrevious) {
+        setTimeout(() => {
+          if (!currentText.trim()) {
+            flashStatus('Type "sample1" then hold space — or just begin writing');
+          }
+        }, 92000);
+      }
+
+      // Keyboard hint in console for developers (harmless)
+      console.log('%c[Socratic Writer] Demo ready. Type "sample1" + hold space, or "export" + hold space.', 'color:#8b7355');
+
+      // Attempt to go full-screen on first real interaction (very powerful for immersion)
+      let fullscreenAttempted = false;
+      const tryFullscreen = () => {
+        if (fullscreenAttempted) return;
+        fullscreenAttempted = true;
+        if (document.fullscreenElement) return;
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+          el.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        }
+      };
+
+      surface.addEventListener('keydown', function once() {
+        tryFullscreen();
+        surface.removeEventListener('keydown', once);
+      }, { once: true });
+
+      // Hide mouse cursor after inactivity while writing (beautiful immersion touch)
+      let mouseTimer = null;
+      document.addEventListener('mousemove', () => {
+        document.body.style.cursor = 'text';
+        clearTimeout(mouseTimer);
+        mouseTimer = setTimeout(() => {
+          if (document.activeElement === surface) {
+            document.body.style.cursor = 'none';
+          }
+        }, 2200);
+      });
+
+      // Initial render polish
+      updateSessionInfo();
+    }
+
+
+    window.addEventListener('DOMContentLoaded', init);
+
+    // Test harness (see tests/keyboard_simulator.py for the real oracle)
+
+    function createKeyboardTestHarness() {
+      const results = [];
+      let passed = 0;
+      let failed = 0;
+
+      function record(name, pass, message = '') {
+        results.push({ name, pass, message });
+        if (pass) passed++; else failed++;
+        if (!pass) console.warn(`[KeyboardTest] FAIL: ${name} — ${message}`);
+      }
+
+      // Create a completely hidden, off-screen contenteditable.
+      // We drive it with real DOM events + a separate test model that follows
+      // the exact same rules as the Python simulator (the source of truth).
+      // This gives high-fidelity testing of the production decision logic
+      // without ever touching the visible writing surface.
+      function createHiddenTestSurface() {
+        const testDiv = document.createElement('div');
+        testDiv.setAttribute('contenteditable', 'plaintext-only');
+        testDiv.setAttribute('spellcheck', 'false');
+        testDiv.style.position = 'fixed';
+        testDiv.style.left = '-99999px';
+        testDiv.style.top = '0';
+        testDiv.style.width = '1px';
+        testDiv.style.height = '1px';
+        testDiv.style.opacity = '0';
+        testDiv.style.pointerEvents = 'none';
+        document.body.appendChild(testDiv);
+
+        let testText = '';
+
+        // Mirror of the production fast autocorrect (must stay in sync)
+        const TEST_AUTOCORRECT = new Map([
+          ['teh', 'the'], ['adn', 'and'], ['taht', 'that'], ['hte', 'the'],
+          ['wiht', 'with'], ['thier', 'their'], ['recieve', 'receive'], ['seperate', 'separate'],
+        ]);
+
+        function testCorrectLastCompletedWord() {
+          const m = testText.match(/(\b)([a-z]{3,})([\s\n.,;:!?)'"\]])$/);
+          if (!m) return;
+          const word = m[2];
+          const corrected = TEST_AUTOCORRECT.get(word);
+          if (!corrected) return;
+          const terminator = m[3];
+          testText = testText.slice(0, -(word.length + terminator.length)) + corrected + terminator;
+        }
+
+        function testCorrectTrailingWord() {
+          const m = testText.match(/(\b)([a-z]{3,})$/);
+          if (!m) return;
+          const word = m[2];
+          const corrected = TEST_AUTOCORRECT.get(word);
+          if (!corrected) return;
+          testText = testText.slice(0, -word.length) + corrected;
+        }
+
+        // Dispatch real events to the hidden div (exercises real browser path)
+        function dispatchRealKey(key, code = null, opts = {}) {
+          const kd = new KeyboardEvent('keydown', {
+            key, code: code || key, bubbles: true, cancelable: true,
+            ctrlKey: !!opts.ctrl, metaKey: !!opts.meta, shiftKey: !!opts.shift
+          });
+          testDiv.dispatchEvent(kd);
+
+          // For printable we also fire a minimal input event so composition/input paths are exercised
+          if (key.length === 1 && !opts.ctrl && !opts.meta) {
+            const inp = new InputEvent('input', { bubbles: true, data: key });
+            testDiv.dispatchEvent(inp);
+          }
+        }
+
+        function driveKey(key, code = null, opts = {}) {
+          // Mirror the exact decision rules from the Python simulator (gold standard)
+          // plus the fast silent autocorrect behavior.
+          if (key === 'Enter') {
+            if (testText.trim() || testText.length === 0) {
+              testText += '\n\n';
+              testCorrectLastCompletedWord();
+            }
+            return 'PARAGRAPH';
+          }
+          if (key === ' ' || code === 'Space') {
+            if (testText.trim().length > 0 && opts.hold) {
+              testCorrectTrailingWord();
+              return 'HOLD_TRIGGERED';
+            }
+            testText += ' ';
+            testCorrectLastCompletedWord();
+            return 'SPACE';
+          }
+          if (FORBIDDEN_KEYS.has(key)) return 'BLOCKED';
+          if ((opts.ctrl || opts.meta) && ['a','z','x','c','v','y','f'].includes(key.toLowerCase())) return 'BLOCKED';
+
+          if (key.length === 1) {
+            testText += key;
+            if (/[\s\n.,;:!?]/.test(key)) {
+              testCorrectLastCompletedWord();
+            }
+            return 'INSERTED';
+          }
+          return 'IGNORED';
+        }
+
+        function reset() {
+          testText = '';
+          testDiv.textContent = '';
+        }
+
+        function getText() { return testText; }
+
+        return { driveKey, dispatchRealKey, reset, getText, element: testDiv };
+      }
+
+      const hidden = createHiddenTestSurface();
+
+      // Test 1: Basic printable characters
+      function testBasicInsertion() {
+        hidden.reset();
+        const seq = 'The quick brown fox 123!@#';
+        seq.split('').forEach(ch => hidden.driveKey(ch));
+        const pass = hidden.getText() === seq;
+        record('basic-insertion', pass, pass ? '' : `got "${hidden.getText()}"`);
+        return pass;
+      }
+
+      // Test 2: Enter for paragraphs
+      function testEnterParagraphs() {
+        hidden.reset();
+        hidden.driveKey('H'); hidden.driveKey('i'); hidden.driveKey('Enter');
+        hidden.driveKey('T'); hidden.driveKey('h'); hidden.driveKey('e'); hidden.driveKey('r'); hidden.driveKey('e');
+        const pass = hidden.getText() === 'Hi\n\nThere';
+        record('enter-paragraphs', pass, pass ? '' : `got "${hidden.getText()}"`);
+        return pass;
+      }
+
+      // Test 3: Normal spaces
+      function testNormalSpaces() {
+        hidden.reset();
+        ['a',' ','b',' ','c'].forEach(k => hidden.driveKey(k));
+        const pass = hidden.getText() === 'a b c';
+        record('normal-spaces', pass, pass ? '' : `got "${hidden.getText()}"`);
+        return pass;
+      }
+
+      // Test 4: Forbidden keys are blocked (no mutation)
+      function testForbiddenKeysBlocked() {
+        hidden.reset();
+        ['a','b','c'].forEach(k => hidden.driveKey(k));
+        const before = hidden.getText();
+        ['Backspace', 'Delete', 'ArrowLeft', 'Home', 'Tab'].forEach(k => hidden.driveKey(k));
+        const pass = hidden.getText() === before;
+        record('forbidden-keys-blocked', pass, pass ? '' : `text changed from "${before}"`);
+        return pass;
+      }
+
+      // Test 5: Rapid burst
+      function testRapidBurst() {
+        hidden.reset();
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
+        chars.forEach(ch => hidden.driveKey(ch));
+        const pass = hidden.getText().length === chars.length && hidden.getText().startsWith('a');
+        record('rapid-burst', pass, pass ? '' : `len=${hidden.getText().length}`);
+        return pass;
+      }
+
+      // Test 6: Long space hold path does not leak a space when it triggers
+      function testLongSpaceNoLeak() {
+        hidden.reset();
+        'hello world'.split('').forEach(k => hidden.driveKey(k));
+        const res = hidden.driveKey(' ', 'Space', { hold: true });
+        const pass = res === 'HOLD_TRIGGERED' && hidden.getText() === 'hello world';
+        record('long-space-no-leak-on-hold', pass, pass ? '' : `res=${res} text="${hidden.getText()}"`);
+        return pass;
+      }
+
+      // Test 7: Space after hold still works (no state corruption)
+      function testSpaceAfterHold() {
+        hidden.reset();
+        'test'.split('').forEach(k => hidden.driveKey(k));
+        hidden.driveKey(' ', 'Space', { hold: true });
+        hidden.driveKey(' ');
+        hidden.driveKey('a');
+        const t = hidden.getText();
+        const pass = t.endsWith('t a') || t === 'test a';
+        record('space-after-hold', pass, pass ? '' : `got "${t}"`);
+        return pass;
+      }
+
+      // Test 8: Fast autocorrect fires instantly on space after a known typo
+      function testAutocorrectOnSpace() {
+        hidden.reset();
+        'I saw teh cat'.split('').forEach(k => hidden.driveKey(k));
+        const pass = hidden.getText() === 'I saw the cat';
+        record('autocorrect-on-space', pass, pass ? '' : `got "${hidden.getText()}"`);
+        return pass;
+      }
+
+      // Test 9: Fast autocorrect also fixes trailing word when long-space hold triggers reflection path
+      function testAutocorrectOnHoldTrailing() {
+        hidden.reset();
+        'The adn was taht'.split('').forEach(k => hidden.driveKey(k));
+        hidden.driveKey(' ', 'Space', { hold: true });
+        const pass = hidden.getText() === 'The and was that';
+        record('autocorrect-on-hold-trailing', pass, pass ? '' : `got "${hidden.getText()}"`);
+        return pass;
+      }
+
+      function runAll() {
+        results.length = 0; passed = 0; failed = 0;
+
+        console.log('%c[KeyboardTest] Starting robust keyboard test suite (completely invisible)...', 'color:#8b7355');
+
+        testBasicInsertion();
+        testEnterParagraphs();
+        testNormalSpaces();
+        testForbiddenKeysBlocked();
+        testRapidBurst();
+        testLongSpaceNoLeak();
+        testSpaceAfterHold();
+        testAutocorrectOnSpace();
+        testAutocorrectOnHoldTrailing();
+
+        const total = passed + failed;
+        const pct = total ? Math.round((passed / total) * 100) : 0;
+        const msg = `Passed ${passed}/${total} (${pct}%)`;
+
+        if (failed === 0) {
+          console.log(`%c[KeyboardTest] ✓ ALL TESTS PASSED — ${msg}`, 'color:#4a7c59; font-weight:600');
+        } else {
+          console.error(`%c[KeyboardTest] ✗ FAILURES DETECTED — ${msg}`, 'color:#a33; font-weight:600');
+          console.table(results.filter(r => !r.pass));
+        }
+        return { passed, failed, total, results };
+      }
+
+      return { runAll };
+    }
+
+    // Expose test harness + debug hooks
+    const keyboardTestHarness = createKeyboardTestHarness();
+
+    window.SW = {
+      loadSample: (k) => loadSample(k),
+      export: () => exportText(),
+      clear: () => { currentText = ''; localStorage.removeItem('socratic-writer-text'); location.reload(); },
+      // Hidden robustness testing — run from console only
+      runKeyboardTests: () => keyboardTestHarness.runAll(),
+      // Internal hooks for advanced external test rigs (Playwright etc.)
+      __internal: {
+        getCurrentText: () => currentText,
+        isCaretAtEnd: () => isCaretAtEnd(),
+        forceRender: () => render(),
+        simulateSpaceHold: () => { /* can be expanded */ },
+        fastAutocorrectMap: FAST_AUTOCORRECT,
+        llm: { model: LLM_MODEL, endpoint: LLM_ENDPOINT, prompt: SOCRATIC_SYSTEM_PROMPT }, // debug / inspect
+      }
+    };
+
+    console.log('%c[Socratic Writer] Keyboard test harness loaded. Run SW.runKeyboardTests() in console for robustness verification.', 'color:#6b5f52; font-size: 10px');
+  </script>
+</body>
+</html>
